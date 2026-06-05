@@ -39,6 +39,8 @@ void printHelp(void) {
   printf("    -m        Display the module information.\n");
   printf("    -o        Display the digital output states.\n");
   printf("    -t <io>   Toggle digital output <io> (1 - 2).\n");
+  printf("    -c <io>   Select digital output <io> (1 - 2).\n");
+  printf("    -s <s>    Set state 0 or 1 for active or inactive\n");
   printf("    -h        This help text.\n");
 }
 
@@ -63,7 +65,7 @@ int openSocket(char * ip, int port) {
 
 	// Connect to the module
     struct sockaddr_in serv_addr;
-    serv_addr.sin_family = AF_INET;                     
+    serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr(ip);     // Set IP address to connect to
     serv_addr.sin_port = htons(port);              // Set port to connect to
 
@@ -72,7 +74,7 @@ int openSocket(char * ip, int port) {
 		perror("openSocket - ");
 		return -1;
     }
-	
+
 	// Return the socket handle
 	return module_socket;
 
@@ -322,7 +324,6 @@ void printOutputStates(int socket) {
 		rs = (buffer[0] & (0x01 << r)) != 0 ? "ACTIVE" : "INACTIVE";
 		printf("Relay %d: %s\n", r + 1, rs);
 	}
-
 }
 
 
@@ -361,6 +362,37 @@ void toggleDigitalOutput(int socket, uint8_t output) {
 
 }
 
+/*
+ * set digital output.
+ *
+ * int socket		- The socket descriptor.
+ * uint8_t output	- the output to toggle.
+ * uint8_t state    - State to set (active or inactive)
+ */
+void setDigitalOutputStates(int socket, uint8_t output, uint8_t state ) {
+
+	uint8_t buffer[3] = { 0 };
+    uint8_t command;
+
+    if (output == 0 || output > 2)
+        return;
+
+    if (state != SET_OUTPUT_INACTIVE && state != SET_OUTPUT_ACTIVE)
+        return;
+
+	buffer[0] = state; // The command tosend either the output active, or inactive.
+	buffer[1] = output;	// The output to switch.
+	buffer[2] = 0x00; // A pulse time, 0 in this case to make the change permanent.
+
+	if (writeData(socket, buffer, 3) < 0) {
+		exit(EXIT_FAILURE);
+	}
+
+	if (readData(socket, buffer, 1) < 0) {
+		exit(EXIT_FAILURE);
+	}
+}
+
 
 int main(int argc, char ** argv) {
 
@@ -369,10 +401,11 @@ int main(int argc, char ** argv) {
 	uint8_t toggle = 0; // Used to indicate if we want to toggle a digital output.
 	int port = 17494; // The port that the module is on.
 	char *password = NULL; // The password used to unlock the module
+    uint8_t channel, state = 0;
 
 	int opt;
 
-	while ((opt = getopt(argc, argv, "omiaP:p:t:h")) != -1) {
+	while ((opt = getopt(argc, argv, "omiaP:p:t:s:c:h")) != -1) {
 
 		switch (opt) {
 
@@ -393,7 +426,6 @@ int main(int argc, char ** argv) {
 			case 'p':
 				port = atoi(optarg);
 				break;
-			
 			/*
 			 * The P option allows the user to supply a password to unlock the module.
 			 */
@@ -413,7 +445,19 @@ int main(int argc, char ** argv) {
 			 */
 			case 't':
 				toggle = atoi(optarg);
-
+                break;
+            /*
+             * Select Channel
+             */
+            case 'c':
+                channel = atoi(optarg);
+                break;
+            /*
+             * Set State
+             */
+            case 's':
+                state = atoi(optarg) == 0 ? SET_OUTPUT_INACTIVE : SET_OUTPUT_ACTIVE;
+                break;
 			case '?':
 				break;
 		}
@@ -455,7 +499,7 @@ int main(int argc, char ** argv) {
 	}
 
 	// If the i argument was passed then print the module information.
-	if (info) {	
+	if (info) {
 		printModuleInfo(socket);
 	}
 
@@ -463,6 +507,14 @@ int main(int argc, char ** argv) {
 	if (toggle) {
 		toggleDigitalOutput(socket, toggle);
 	}
+
+    if (channel)
+    {
+        if(!state)
+            perror("Missing state -s for given channel");
+        else
+            setDigitalOutputStates(socket, channel, state);
+    }
 
 	// if the o argument was passed then show the states of the outputs.
 	if (outputs) {
