@@ -18,4 +18,21 @@ Toggle relay number 1.
 eth002 -t 1 -P <password> -p <port> <ip> 
 ```
 
+## Set channels to active or inactive
 
+Toggling of relays can be ineffective in certain circumstances, especially when
+a certain guarantee of a required state is needed.
+
+Instead of toggling, use the dedicated state and channel flags.
+
+### Set channel one to high
+
+```
+eth002 -c 1 -s 1 <password> -p <port> <ip>
+```
+
+### Set channel one to inactive
+
+```
+eth002 -c 1 -s 0 <password> -p <port> <ip>
+```
